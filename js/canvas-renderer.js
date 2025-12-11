@@ -10,7 +10,7 @@ class CanvasRenderer {
         
         // Colors
         this.colors = {
-            empty: '#d1d5db',      // gray-300
+            empty: '#1e293b',      // slate-800 (dark blue-black)
             filled: '#2563eb',     // blue-600
             highlight: 'rgba(34, 197, 94, 0.5)', // green glow
             clearing: '#fbbf24',   // yellow flash
@@ -23,6 +23,7 @@ class CanvasRenderer {
         
         // Animation state
         this.clearingCells = new Set();
+        this.clearingAnimations = new Map(); // Store animation data for each cell
         this.animationFrame = null;
     }
 
@@ -98,9 +99,23 @@ class CanvasRenderer {
                 const cellKey = `${r}-${c}`;
                 const isHighlighted = highlightedSet.has(cellKey);
                 const isClearing = this.clearingCells.has(cellKey);
+                const animData = this.clearingAnimations.get(cellKey);
                 
                 // Draw cell
-                if (isClearing) {
+                this.ctx.save();
+                
+                if (isClearing && animData) {
+                    // Apply animation transformations
+                    const centerX = x + this.cellSize / 2;
+                    const centerY = y + this.cellSize / 2;
+                    
+                    this.ctx.translate(centerX, centerY);
+                    this.ctx.rotate(animData.rotation);
+                    this.ctx.scale(animData.scale, animData.scale);
+                    this.ctx.translate(-centerX, -centerY);
+                    
+                    // Use opacity for fade effect
+                    this.ctx.globalAlpha = animData.opacity;
                     this.ctx.fillStyle = this.colors.clearing;
                 } else if (isHighlighted) {
                     this.ctx.fillStyle = this.colors.highlight;
@@ -111,7 +126,6 @@ class CanvasRenderer {
                 }
                 
                 // Draw rounded rectangle
-                this.ctx.save();
                 this.ctx.beginPath();
                 const radius = 4;
                 if (this.ctx.roundRect) {
@@ -142,8 +156,9 @@ class CanvasRenderer {
      * @param {number} y - Y position (center)
      * @param {string} color - Color of the piece
      * @param {number} scale - Scale factor (default 1)
+     * @param {boolean} withShadow - Whether to draw shadow (default false)
      */
-    drawPiece(pieceMatrix, x, y, color, scale = 1) {
+    drawPiece(pieceMatrix, x, y, color, scale = 1, withShadow = false) {
         const rows = pieceMatrix.length;
         const cols = pieceMatrix[0].length;
         const pieceWidth = cols * this.cellSize * scale;
@@ -155,21 +170,25 @@ class CanvasRenderer {
         
         this.ctx.save();
         
+        // Draw shadow if needed
+        if (withShadow) {
+            this.ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+            this.ctx.shadowBlur = 15;
+            this.ctx.shadowOffsetX = 0;
+            this.ctx.shadowOffsetY = 4;
+        }
+        
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
                 if (pieceMatrix[r][c] === 1) {
                     const blockX = startX + c * this.cellSize * scale;
                     const blockY = startY + r * this.cellSize * scale;
+                    const blockSize = this.cellSize * scale;
                     
-                    // Draw block
-                    this.ctx.fillStyle = color;
-                    this.ctx.fillRect(blockX, blockY, this.cellSize * scale, this.cellSize * scale);
-                    
-                    // Rounded corners
+                    // Draw rounded rectangle
                     this.ctx.save();
                     this.ctx.beginPath();
                     const radius = 4;
-                    const blockSize = this.cellSize * scale;
                     if (this.ctx.roundRect) {
                         this.ctx.roundRect(blockX, blockY, blockSize, blockSize, radius);
                     } else {
@@ -185,10 +204,19 @@ class CanvasRenderer {
                         this.ctx.quadraticCurveTo(blockX, blockY, blockX + radius, blockY);
                         this.ctx.closePath();
                     }
+                    this.ctx.fillStyle = color;
                     this.ctx.fill();
                     this.ctx.restore();
                 }
             }
+        }
+        
+        // Reset shadow
+        if (withShadow) {
+            this.ctx.shadowColor = 'transparent';
+            this.ctx.shadowBlur = 0;
+            this.ctx.shadowOffsetX = 0;
+            this.ctx.shadowOffsetY = 0;
         }
         
         this.ctx.restore();
@@ -269,38 +297,74 @@ class CanvasRenderer {
     }
 
     /**
-     * Animate clearing cells
+     * Animate clearing cells with enhanced animation
      * @param {Array} rows - Array of row indices
      * @param {Array} cols - Array of column indices
      * @param {Function} callback - Callback when animation completes
      */
     animateClearing(rows, cols, callback) {
-        // Mark cells as clearing
+        const startTime = Date.now();
+        const duration = CLEAR_ANIMATION_DURATION;
+        
+        // Mark cells as clearing and initialize animation data
         rows.forEach(r => {
             for (let c = 0; c < this.boardSize; c++) {
-                this.clearingCells.add(`${r}-${c}`);
+                const cellKey = `${r}-${c}`;
+                this.clearingCells.add(cellKey);
+                this.clearingAnimations.set(cellKey, {
+                    startTime: startTime,
+                    scale: 1,
+                    opacity: 1,
+                    rotation: 0
+                });
             }
         });
         cols.forEach(c => {
             for (let r = 0; r < this.boardSize; r++) {
-                this.clearingCells.add(`${r}-${c}`);
+                const cellKey = `${r}-${c}`;
+                // Avoid duplicate if cell is in both row and col
+                if (!this.clearingCells.has(cellKey)) {
+                    this.clearingCells.add(cellKey);
+                    this.clearingAnimations.set(cellKey, {
+                        startTime: startTime,
+                        scale: 1,
+                        opacity: 1,
+                        rotation: 0
+                    });
+                }
             }
         });
         
         // Animate
-        let startTime = null;
-        const duration = CLEAR_ANIMATION_DURATION;
-        
-        const animate = (timestamp) => {
-            if (!startTime) startTime = timestamp;
-            const progress = (timestamp - startTime) / duration;
+        const animate = () => {
+            const currentTime = Date.now();
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            
+            // Update animation properties for each cell
+            this.clearingAnimations.forEach((anim, cellKey) => {
+                // Scale from 1 to 1.3 then back to 0
+                if (progress < 0.3) {
+                    anim.scale = 1 + (progress / 0.3) * 0.3;
+                } else if (progress < 0.7) {
+                    anim.scale = 1.3 - ((progress - 0.3) / 0.4) * 0.3;
+                } else {
+                    anim.scale = 1 - ((progress - 0.7) / 0.3);
+                }
+                
+                // Opacity fade out
+                anim.opacity = 1 - progress;
+                
+                // Slight rotation for effect
+                anim.rotation = progress * Math.PI * 0.5;
+            });
             
             if (progress < 1) {
                 this.animationFrame = requestAnimationFrame(animate);
-                // Redraw will be handled by drawBoard
             } else {
-                // Clear clearing cells
+                // Clear clearing cells and animations
                 this.clearingCells.clear();
+                this.clearingAnimations.clear();
                 if (callback) callback();
             }
         };

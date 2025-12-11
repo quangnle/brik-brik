@@ -269,10 +269,10 @@ class PuzzleGame {
             const anchorCanvasX = anchorScreenX - rect.left;
             const anchorCanvasY = anchorScreenY - rect.top;
             
-            // Draw ghost piece with slight transparency
+            // Draw ghost piece with slight transparency and shadow
             this.renderer.ctx.save();
-            this.renderer.ctx.globalAlpha = 0.7;
-            this.renderer.drawPiece(piece.matrix, anchorCanvasX, anchorCanvasY, color);
+            this.renderer.ctx.globalAlpha = 0.8;
+            this.renderer.drawPiece(piece.matrix, anchorCanvasX, anchorCanvasY, color, 1, true);
             this.renderer.ctx.restore();
         }
     }
