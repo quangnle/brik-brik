@@ -120,6 +120,7 @@ class CanvasRenderer {
                 } else if (isHighlighted) {
                     this.ctx.fillStyle = this.colors.highlight;
                 } else if (board[r][c] === 1) {
+                    // Filled cell - add 3D effect
                     this.ctx.fillStyle = this.colors.filled;
                 } else {
                     this.ctx.fillStyle = this.colors.empty;
@@ -144,6 +145,24 @@ class CanvasRenderer {
                     this.ctx.closePath();
                 }
                 this.ctx.fill();
+                
+                // Add 3D effect for filled cells
+                if (board[r][c] === 1 && !isClearing && !isHighlighted) {
+                    // 3D gradient overlay (light from top-left, dark at bottom-right)
+                    const gradient = this.ctx.createLinearGradient(x, y, x + this.cellSize, y + this.cellSize);
+                    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
+                    gradient.addColorStop(0.5, 'transparent');
+                    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.25)');
+                    
+                    this.ctx.fillStyle = gradient;
+                    this.ctx.fill();
+                    
+                    // Highlight border (top-left)
+                    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+                    this.ctx.lineWidth = 1;
+                    this.ctx.stroke();
+                }
+                
                 this.ctx.restore();
             }
         }
@@ -185,8 +204,10 @@ class CanvasRenderer {
                     const blockY = startY + r * this.cellSize * scale;
                     const blockSize = this.cellSize * scale;
                     
-                    // Draw rounded rectangle
+                    // Draw 3D raised block
                     this.ctx.save();
+                    
+                    // Create rounded rectangle path
                     this.ctx.beginPath();
                     const radius = 4;
                     if (this.ctx.roundRect) {
@@ -204,8 +225,52 @@ class CanvasRenderer {
                         this.ctx.quadraticCurveTo(blockX, blockY, blockX + radius, blockY);
                         this.ctx.closePath();
                     }
+                    
+                    // Fill base color
                     this.ctx.fillStyle = color;
                     this.ctx.fill();
+                    
+                    // Add 3D gradient overlay (light from top-left, dark at bottom-right)
+                    const gradient = this.ctx.createLinearGradient(
+                        blockX, blockY,
+                        blockX + blockSize, blockY + blockSize
+                    );
+                    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
+                    gradient.addColorStop(0.5, 'transparent');
+                    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)');
+                    
+                    this.ctx.fillStyle = gradient;
+                    this.ctx.fill();
+                    
+                    // Add highlight border (top-left)
+                    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                    this.ctx.lineWidth = 1;
+                    this.ctx.stroke();
+                    
+                    // Add shadow for depth (bottom-right)
+                    this.ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+                    this.ctx.shadowBlur = 3;
+                    this.ctx.shadowOffsetX = 2;
+                    this.ctx.shadowOffsetY = 2;
+                    
+                    // Draw subtle outer shadow
+                    this.ctx.beginPath();
+                    if (this.ctx.roundRect) {
+                        this.ctx.roundRect(blockX + 1, blockY + 1, blockSize - 2, blockSize - 2, radius);
+                    } else {
+                        // Simplified path for shadow
+                        this.ctx.rect(blockX + 1, blockY + 1, blockSize - 2, blockSize - 2);
+                    }
+                    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+                    this.ctx.lineWidth = 1;
+                    this.ctx.stroke();
+                    
+                    // Reset shadow
+                    this.ctx.shadowColor = 'transparent';
+                    this.ctx.shadowBlur = 0;
+                    this.ctx.shadowOffsetX = 0;
+                    this.ctx.shadowOffsetY = 0;
+                    
                     this.ctx.restore();
                 }
             }

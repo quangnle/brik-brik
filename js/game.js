@@ -308,12 +308,61 @@ class PuzzleGame {
         container.style.display = 'grid';
         container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
         container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-        container.style.gap = '2px';
+        const gap = 2;
+        container.style.gap = `${gap}px`;
         
         // Display size in tray - larger on mobile for easier touch
         const cellSize = IS_MOBILE ? PIECE_DISPLAY_CELL_SIZE_MOBILE : PIECE_DISPLAY_CELL_SIZE;
-        container.style.width = `${cols * cellSize}px`;
-        container.style.height = `${rows * cellSize}px`;
+        const MIN_TOUCH_SIZE = 44; // Minimum touch target size
+        
+        // Get slot dimensions to ensure piece fits
+        const slot = this.slots[index];
+        const slotRect = slot.getBoundingClientRect();
+        // Account for padding (p-2 sm:p-3 = 8px mobile, 12px desktop)
+        const slotPadding = IS_MOBILE ? 8 : 12;
+        const maxSlotWidth = slotRect.width - slotPadding * 2;
+        const maxSlotHeight = slotRect.height - slotPadding * 2;
+        
+        // Calculate base dimensions (without gap)
+        const baseWidth = cols * cellSize;
+        const baseHeight = rows * cellSize;
+        
+        // Calculate total dimensions including gaps
+        const totalWidth = baseWidth + (cols > 1 ? (cols - 1) * gap : 0);
+        const totalHeight = baseHeight + (rows > 1 ? (rows - 1) * gap : 0);
+        
+        // Calculate scale factors for different constraints
+        let scaleFactor = 1;
+        
+        // 1. Scale to meet minimum touch size (check both dimensions)
+        if (totalWidth < MIN_TOUCH_SIZE) {
+            const scaleForWidth = MIN_TOUCH_SIZE / totalWidth;
+            scaleFactor = Math.max(scaleFactor, scaleForWidth);
+        }
+        if (totalHeight < MIN_TOUCH_SIZE) {
+            const scaleForHeight = MIN_TOUCH_SIZE / totalHeight;
+            scaleFactor = Math.max(scaleFactor, scaleForHeight);
+        }
+        
+        // 2. Scale down if piece exceeds slot dimensions (maintain aspect ratio)
+        const scaledWidth = totalWidth * scaleFactor;
+        const scaledHeight = totalHeight * scaleFactor;
+        
+        if (scaledWidth > maxSlotWidth) {
+            const scaleToFitWidth = maxSlotWidth / totalWidth;
+            scaleFactor = Math.min(scaleFactor, scaleToFitWidth);
+        }
+        if (scaledHeight > maxSlotHeight) {
+            const scaleToFitHeight = maxSlotHeight / totalHeight;
+            scaleFactor = Math.min(scaleFactor, scaleToFitHeight);
+        }
+        
+        // Apply final scaled dimensions (maintain aspect ratio)
+        const finalWidth = baseWidth * scaleFactor;
+        const finalHeight = baseHeight * scaleFactor;
+        
+        container.style.width = `${finalWidth}px`;
+        container.style.height = `${finalHeight}px`;
 
         container.dataset.index = index;
 
