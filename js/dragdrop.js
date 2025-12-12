@@ -49,13 +49,14 @@ class DragDropHandler {
         this.draggedPiece = pieceData;
         this.isDragging = true;
 
-        // Get pointer position (this will be our anchor point)
+        // Get pointer position
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-        // Set anchor point: center of the piece, positioned at cursor/finger
-        this.anchorPointX = clientX;
-        this.anchorPointY = clientY;
+        // Project initial position onto board so ghost piece appears on board immediately
+        const projected = this.projectToBoard(clientX, clientY);
+        this.anchorPointX = projected.x;
+        this.anchorPointY = projected.y;
 
         // Hide original piece with better visual feedback
         target.style.opacity = '0.3';
@@ -164,15 +165,100 @@ class DragDropHandler {
     }
 
     /**
+     * Project screen coordinates onto board area
+     * This ensures ghost piece always appears on board, even if cursor is below
+     * Uses valid zone (board + pieces area) and clamps to board bounds
+     * @param {number} screenX - Screen X coordinate
+     * @param {number} screenY - Screen Y coordinate
+     * @returns {Object} - {x, y} coordinates projected onto board
+     */
+    projectToBoard(screenX, screenY) {
+        const boardRect = this.game.renderer.canvas.getBoundingClientRect();
+        const piecesArea = document.getElementById('pieces-area');
+        const piecesRect = piecesArea.getBoundingClientRect();
+        
+        // Define valid zone: board + pieces area + small margin for smooth transition
+        const margin = 50;
+        const validZone = {
+            left: Math.min(boardRect.left, piecesRect.left) - margin,
+            right: Math.max(boardRect.right, piecesRect.right) + margin,
+            top: boardRect.top - margin,
+            bottom: piecesRect.bottom + margin
+        };
+        
+        let projectedX = screenX;
+        let projectedY = screenY;
+        
+        // Check if cursor is in valid zone
+        const inValidZone = screenX >= validZone.left && screenX <= validZone.right &&
+                           screenY >= validZone.top && screenY <= validZone.bottom;
+        
+        if (inValidZone) {
+            // Cursor is in valid zone - project smoothly
+            
+            // X coordinate: map from valid zone to board
+            if (screenX >= boardRect.left && screenX <= boardRect.right) {
+                // Directly in board - use actual position
+                projectedX = screenX;
+            } else if (screenX >= piecesRect.left && screenX <= piecesRect.right) {
+                // In pieces area - map proportionally to board
+                const relativeX = (screenX - piecesRect.left) / piecesRect.width;
+                projectedX = boardRect.left + relativeX * boardRect.width;
+            } else {
+                // Between areas - clamp to nearest board edge
+                if (screenX < boardRect.left) {
+                    projectedX = boardRect.left;
+                } else {
+                    projectedX = boardRect.right;
+                }
+            }
+            
+            // Y coordinate: map from valid zone to board
+            if (screenY >= boardRect.top && screenY <= boardRect.bottom) {
+                // Directly in board - use actual position
+                projectedY = screenY;
+            } else if (screenY >= piecesRect.top && screenY <= piecesRect.bottom) {
+                // In pieces area - map proportionally to board
+                const relativeY = (screenY - piecesRect.top) / piecesRect.height;
+                projectedY = boardRect.top + relativeY * boardRect.height;
+            } else if (screenY < boardRect.top) {
+                // Above board - clamp to top
+                projectedY = boardRect.top;
+            } else {
+                // Below pieces area - clamp to bottom
+                projectedY = boardRect.bottom;
+            }
+        } else {
+            // Cursor is outside valid zone - clamp to nearest board edge
+            // This prevents ghost piece from jumping to center
+            projectedX = Math.max(boardRect.left, Math.min(boardRect.right, screenX));
+            projectedY = Math.max(boardRect.top, Math.min(boardRect.bottom, screenY));
+        }
+        
+        // Final clamp: ensure anchor point is always strictly within board bounds
+        // This is the safety net to prevent any edge cases
+        projectedX = Math.max(boardRect.left, Math.min(boardRect.right, projectedX));
+        projectedY = Math.max(boardRect.top, Math.min(boardRect.bottom, projectedY));
+        
+        return { x: projectedX, y: projectedY };
+    }
+
+    /**
      * Update anchor point position
      * Anchor point (center of piece) always follows cursor/finger position
-     * @param {number} x - Screen X coordinate (anchor point position)
-     * @param {number} y - Screen Y coordinate (anchor point position)
+     * Ghost piece appears on board immediately and moves synchronously
+     * @param {number} x - Screen X coordinate (cursor/finger position)
+     * @param {number} y - Screen Y coordinate (cursor/finger position)
      */
     updateGhostPosition(x, y) {
-        // Anchor point is the center of the piece
-        this.anchorPointX = x;
-        this.anchorPointY = y;
+        // Project cursor position onto board area
+        // This ensures ghost piece appears on board even if cursor is below
+        const projected = this.projectToBoard(x, y);
+        
+        // Anchor point follows the projected position
+        this.anchorPointX = projected.x;
+        this.anchorPointY = projected.y;
+        
         // Trigger board redraw to show ghost piece
         this.game.renderBoard();
     }
