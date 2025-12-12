@@ -12,6 +12,9 @@ class DragDropHandler {
         // Anchor point: the center of the piece, always follows cursor/finger
         this.anchorPointX = 0;
         this.anchorPointY = 0;
+        // Store initial click position in slot for relative mapping
+        this.initialSlotRect = null;
+        this.initialClickInSlot = { x: 0, y: 0 };
     }
 
     /**
@@ -52,6 +55,14 @@ class DragDropHandler {
         // Get pointer position
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        // Store initial slot rect and click position for relative mapping
+        const slot = this.game.slots[this.draggedIndex];
+        this.initialSlotRect = slot.getBoundingClientRect();
+        this.initialClickInSlot = {
+            x: clientX - this.initialSlotRect.left,
+            y: clientY - this.initialSlotRect.top
+        };
 
         // Project initial position onto board so ghost piece appears on board immediately
         const projected = this.projectToBoard(clientX, clientY);
@@ -105,6 +116,8 @@ class DragDropHandler {
         this.isDragging = false;
         const tempDraggedPiece = this.draggedPiece;
         this.draggedPiece = null;
+        this.initialSlotRect = null;
+        this.initialClickInSlot = { x: 0, y: 0 };
         
         // Restore body scroll
         if (this.isMobile) {
@@ -162,12 +175,13 @@ class DragDropHandler {
 
         this.draggedPiece = null;
         this.draggedIndex = -1;
+        this.initialSlotRect = null;
+        this.initialClickInSlot = { x: 0, y: 0 };
     }
 
     /**
-     * Project screen coordinates onto board area
-     * This ensures ghost piece always appears on board, even if cursor is below
-     * Uses valid zone (board + pieces area) and clamps to board bounds
+     * Project screen coordinates onto board area using slot-based mapping
+     * Each slot maps proportionally to the entire board
      * @param {number} screenX - Screen X coordinate
      * @param {number} screenY - Screen Y coordinate
      * @returns {Object} - {x, y} coordinates projected onto board
@@ -177,7 +191,39 @@ class DragDropHandler {
         const piecesArea = document.getElementById('pieces-area');
         const piecesRect = piecesArea.getBoundingClientRect();
         
-        // Define valid zone: board + pieces area + small margin for smooth transition
+        // If cursor is directly on board, use actual position
+        if (screenX >= boardRect.left && screenX <= boardRect.right &&
+            screenY >= boardRect.top && screenY <= boardRect.bottom) {
+            return { x: screenX, y: screenY };
+        }
+        
+        // If we have initial slot info (during drag), use slot-based mapping
+        if (this.isDragging && this.initialSlotRect && this.draggedIndex >= 0) {
+            // Get current slot rect (may have changed due to resize)
+            const slot = this.game.slots[this.draggedIndex];
+            const currentSlotRect = slot.getBoundingClientRect();
+            
+            // Calculate current cursor position relative to slot
+            const currentXInSlot = screenX - currentSlotRect.left;
+            const currentYInSlot = screenY - currentSlotRect.top;
+            
+            // Calculate relative position in slot (0-1)
+            const relativeX = currentXInSlot / currentSlotRect.width;
+            const relativeY = currentYInSlot / currentSlotRect.height;
+            
+            // Map to board: relative position * board size + board offset
+            let projectedX = boardRect.left + relativeX * boardRect.width;
+            let projectedY = boardRect.top + relativeY * boardRect.height;
+            
+            // Clamp to board bounds
+            projectedX = Math.max(boardRect.left, Math.min(boardRect.right, projectedX));
+            projectedY = Math.max(boardRect.top, Math.min(boardRect.bottom, projectedY));
+            
+            return { x: projectedX, y: projectedY };
+        }
+        
+        // Fallback: if not dragging or no slot info, use old logic
+        // Define valid zone: board + pieces area + small margin
         const margin = 50;
         const validZone = {
             left: Math.min(boardRect.left, piecesRect.left) - margin,
@@ -189,54 +235,29 @@ class DragDropHandler {
         let projectedX = screenX;
         let projectedY = screenY;
         
-        // Check if cursor is in valid zone
         const inValidZone = screenX >= validZone.left && screenX <= validZone.right &&
                            screenY >= validZone.top && screenY <= validZone.bottom;
         
         if (inValidZone) {
-            // Cursor is in valid zone - project smoothly
-            
-            // X coordinate: map from valid zone to board
-            if (screenX >= boardRect.left && screenX <= boardRect.right) {
-                // Directly in board - use actual position
-                projectedX = screenX;
-            } else if (screenX >= piecesRect.left && screenX <= piecesRect.right) {
-                // In pieces area - map proportionally to board
+            // In pieces area - map proportionally to board
+            if (screenX >= piecesRect.left && screenX <= piecesRect.right &&
+                screenY >= piecesRect.top && screenY <= piecesRect.bottom) {
                 const relativeX = (screenX - piecesRect.left) / piecesRect.width;
-                projectedX = boardRect.left + relativeX * boardRect.width;
-            } else {
-                // Between areas - clamp to nearest board edge
-                if (screenX < boardRect.left) {
-                    projectedX = boardRect.left;
-                } else {
-                    projectedX = boardRect.right;
-                }
-            }
-            
-            // Y coordinate: map from valid zone to board
-            if (screenY >= boardRect.top && screenY <= boardRect.bottom) {
-                // Directly in board - use actual position
-                projectedY = screenY;
-            } else if (screenY >= piecesRect.top && screenY <= piecesRect.bottom) {
-                // In pieces area - map proportionally to board
                 const relativeY = (screenY - piecesRect.top) / piecesRect.height;
+                projectedX = boardRect.left + relativeX * boardRect.width;
                 projectedY = boardRect.top + relativeY * boardRect.height;
-            } else if (screenY < boardRect.top) {
-                // Above board - clamp to top
-                projectedY = boardRect.top;
             } else {
-                // Below pieces area - clamp to bottom
-                projectedY = boardRect.bottom;
+                // Between areas - clamp to nearest edge
+                projectedX = Math.max(boardRect.left, Math.min(boardRect.right, screenX));
+                projectedY = Math.max(boardRect.top, Math.min(boardRect.bottom, screenY));
             }
         } else {
-            // Cursor is outside valid zone - clamp to nearest board edge
-            // This prevents ghost piece from jumping to center
+            // Outside valid zone - clamp to nearest board edge
             projectedX = Math.max(boardRect.left, Math.min(boardRect.right, screenX));
             projectedY = Math.max(boardRect.top, Math.min(boardRect.bottom, screenY));
         }
         
-        // Final clamp: ensure anchor point is always strictly within board bounds
-        // This is the safety net to prevent any edge cases
+        // Final clamp
         projectedX = Math.max(boardRect.left, Math.min(boardRect.right, projectedX));
         projectedY = Math.max(boardRect.top, Math.min(boardRect.bottom, projectedY));
         
