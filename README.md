@@ -1,4 +1,4 @@
-# 8x8 Puzzle Game
+# Brik Brik
 
 A strategic puzzle game where you place tetris-like pieces on an 8x8 board to clear lines and score points.
 
