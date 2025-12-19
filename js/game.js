@@ -304,6 +304,8 @@ class PuzzleGame {
         
         const container = document.createElement('div');
         container.className = 'piece relative cursor-move';
+        // Ensure each piece has a unique identifier to prevent overlap
+        container.id = `piece-${index}-${Date.now()}-${Math.random()}`;
         // Calculate grid style for small piece display
         container.style.display = 'grid';
         container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;

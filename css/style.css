@@ -56,6 +56,10 @@ body {
     touch-action: none;
     -webkit-tap-highlight-color: transparent;
     /* min-width and min-height removed - handled in JS to maintain aspect ratio */
+    position: relative;
+    z-index: 1;
+    /* Ensure each piece is properly contained within its slot */
+    margin: 0 auto;
 }
 
 /* 3D effect for piece blocks */
@@ -106,12 +110,25 @@ body {
     /* Better spacing for mobile */
     .piece-slot {
         padding: 4px;
+        /* Ensure each slot is isolated */
+        position: relative;
+        overflow: visible;
     }
     
     /* Larger pieces on mobile for easier interaction */
     .piece {
         transform: scale(1.1);
+        /* Ensure pieces don't overlap */
+        position: relative;
+        z-index: 1;
     }
+}
+
+/* Piece slot styling - ensure each slot is isolated */
+.piece-slot {
+    position: relative;
+    isolation: isolate; /* Create new stacking context for each slot */
+    overflow: visible;
 }
 
 /* Prevent iOS bounce scroll and overscroll */
