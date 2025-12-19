@@ -15,7 +15,6 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('.')); // Serve static files
 
 // Game constants (shared with client)
 const BOARD_SIZE = 8;
@@ -341,7 +340,8 @@ async function saveTopRank(name, score) {
     }
 }
 
-// API Routes
+// API Routes - must be registered BEFORE static files
+// (So API routes take precedence over static files with same path)
 
 // Initialize new game
 app.post('/api/game/init', (req, res) => {
@@ -589,6 +589,31 @@ app.post('/api/rank', async (req, res) => {
         console.error('Error saving top rank:', error);
         res.status(500).json({ success: false, error: error.message });
     }
+});
+
+// Serve static files AFTER API routes
+// Use path.join(__dirname) to ensure correct path resolution on Render
+app.use(express.static(path.join(__dirname), {
+    setHeaders: (res, filepath) => {
+        // Set correct MIME types for JavaScript files
+        if (filepath.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        } else if (filepath.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css; charset=utf-8');
+        } else if (filepath.endsWith('.json')) {
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        }
+    }
+}));
+
+// Catch-all handler: serve index.html for any non-API routes (for SPA)
+app.get('*', (req, res) => {
+    // Skip API routes
+    if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ success: false, error: 'API endpoint not found' });
+    }
+    // Serve index.html for all other routes
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Start server
