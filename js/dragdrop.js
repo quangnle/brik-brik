@@ -126,19 +126,10 @@ class DragDropHandler {
         
         const originalPieceEl = this.game.slots[this.draggedIndex]?.querySelector('.piece');
         if (placed) {
-            // Remove from current pieces
-            this.game.currentPieces[this.draggedIndex] = null;
-            this.game.slots[this.draggedIndex].innerHTML = '';
-            
-            // Clear highlight and render (ghost piece will be gone because isDragging = false)
+            // Piece placement is handled by tryPlacePiece which updates state and calls renderPieces
+            // Don't manually modify slots here as it can conflict with renderPieces
+            // The renderPieces call in tryPlacePiece will handle removing the placed piece
             this.game.clearHighlight();
-            
-            // Check if all pieces are used
-            if (this.game.currentPieces.every(p => p === null)) {
-                this.game.spawnNewPieces();
-            } else {
-                this.game.checkGameOver();
-            }
         } else {
             // Return to original position
             if (originalPieceEl) {
