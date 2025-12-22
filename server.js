@@ -592,19 +592,43 @@ app.post('/api/rank', async (req, res) => {
 });
 
 // Serve static files AFTER API routes
-// Use path.join(__dirname) to ensure correct path resolution on Render
-app.use(express.static(path.join(__dirname), {
-    setHeaders: (res, filepath) => {
-        // Set correct MIME types for JavaScript files
-        if (filepath.endsWith('.js')) {
-            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-        } else if (filepath.endsWith('.css')) {
-            res.setHeader('Content-Type', 'text/css; charset=utf-8');
-        } else if (filepath.endsWith('.json')) {
-            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+// Serve JS files with explicit route first to ensure correct MIME type
+app.get('/js/:filename', (req, res, next) => {
+    const filename = req.params.filename;
+    const filepath = path.join(__dirname, 'js', filename);
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.sendFile(filepath, (err) => {
+        if (err) {
+            next(); // Pass to next middleware if file not found
         }
-    }
-}));
+    });
+});
+
+// Serve CSS files with explicit route
+app.get('/css/:filename', (req, res, next) => {
+    const filename = req.params.filename;
+    const filepath = path.join(__dirname, 'css', filename);
+    res.setHeader('Content-Type', 'text/css; charset=utf-8');
+    res.sendFile(filepath, (err) => {
+        if (err) {
+            next(); // Pass to next middleware if file not found
+        }
+    });
+});
+
+// Serve images
+app.get('/images/:filename', (req, res, next) => {
+    const filename = req.params.filename;
+    const filepath = path.join(__dirname, 'images', filename);
+    res.sendFile(filepath, (err) => {
+        if (err) {
+            next(); // Pass to next middleware if file not found
+        }
+    });
+});
+
+// Serve other static files
+app.use(express.static(path.join(__dirname)));
 
 // Catch-all handler: serve index.html for any non-API routes (for SPA)
 app.get('*', (req, res) => {
