@@ -314,15 +314,41 @@ async function loadTopRank() {
     try {
         const data = await fs.readFile(TOP_RANK_FILE, 'utf8');
         const rank = JSON.parse(data);
-        if (rank && typeof rank.score === 'number' && rank.name) {
+        // Check if rank is valid (not null and has required fields)
+        if (rank && typeof rank === 'object' && typeof rank.score === 'number' && rank.name) {
             return rank;
         }
+        // File exists but contains null or invalid data
+        return null;
     } catch (e) {
-        if (e.code !== 'ENOENT') {
+        if (e.code === 'ENOENT') {
+            // File doesn't exist, create empty file with null
+            try {
+                await fs.writeFile(TOP_RANK_FILE, JSON.stringify(null, null, 2), 'utf8');
+            } catch (writeErr) {
+                console.error('Error creating top-rank.json file:', writeErr);
+            }
+        } else {
             console.error('Error loading top rank:', e);
         }
     }
     return null;
+}
+
+// Initialize top-rank.json file on server start
+async function initializeTopRankFile() {
+    try {
+        // Try to read the file to check if it exists and is valid
+        const rank = await loadTopRank();
+        if (rank) {
+            console.log(`Top rank loaded from file: ${rank.name} - ${rank.score}`);
+        } else {
+            // File exists but is null/empty, or file doesn't exist (loadTopRank creates it)
+            console.log('Top rank file initialized (no existing record)');
+        }
+    } catch (e) {
+        console.error('Error initializing top-rank.json file:', e);
+    }
 }
 
 async function saveTopRank(name, score) {
@@ -641,6 +667,8 @@ app.get('*', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`Brik Brik server running on http://localhost:${PORT}`);
+    // Initialize top-rank.json file on startup
+    await initializeTopRankFile();
 });
