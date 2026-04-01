@@ -6,6 +6,29 @@ class PieceGenerator {
     constructor(shapeLibrary, boardManager) {
         this.shapeLibrary = shapeLibrary;
         this.boardManager = boardManager;
+
+        // Pre-calculate weights for pieces based on size (number of 1s in matrix)
+        // Larger pieces = higher weight = higher probability
+        this.weights = this.shapeLibrary.map(shape => {
+            return shape.flat().reduce((sum, cell) => sum + cell, 0);
+        });
+        this.totalWeight = this.weights.reduce((sum, weight) => sum + weight, 0);
+    }
+
+    /**
+     * Get a random shape from the library using weighted probability
+     * @returns {Array} - 2D matrix representing a shape
+     */
+    getWeightedRandomShape() {
+        let r = Math.random() * this.totalWeight;
+        for (let i = 0; i < this.shapeLibrary.length; i++) {
+            r -= this.weights[i];
+            if (r <= 0) {
+                return this.shapeLibrary[i];
+            }
+        }
+        // Fallback to last shape
+        return this.shapeLibrary[this.shapeLibrary.length - 1];
     }
 
     /**
@@ -26,7 +49,7 @@ class PieceGenerator {
 
             while (!foundPiece && attempts < MAX_GENERATION_ATTEMPTS) {
                 // Step 1: Get random shape from library
-                let randomShape = this.shapeLibrary[Math.floor(Math.random() * this.shapeLibrary.length)];
+                let randomShape = this.getWeightedRandomShape();
                 
                 // Try all 4 rotations: 0, 90, 180, 270
                 let rotations = this.getAllRotations(randomShape);
@@ -57,7 +80,7 @@ class PieceGenerator {
             // Fallback: If unlucky and couldn't find any valid piece (board too full),
             // just pick a random one (so game can end if truly no moves left)
             if (!foundPiece) {
-                let randomShape = this.shapeLibrary[Math.floor(Math.random() * this.shapeLibrary.length)];
+                let randomShape = this.getWeightedRandomShape();
                 foundPiece = {
                     matrix: randomShape,
                     color: COLORS[Math.floor(Math.random() * COLORS.length)],
