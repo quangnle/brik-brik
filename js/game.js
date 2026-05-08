@@ -32,6 +32,9 @@ class PuzzleGame {
         this.recordModal = document.getElementById('record-modal');
         this.recordNameInput = document.getElementById('record-name-input');
         this.topRankEl = document.getElementById('top-rank');
+        this.topRankLabelEl = document.getElementById('top-rank-label');
+        this.rankingModal = document.getElementById('ranking-modal');
+        this.rankingListEl = document.getElementById('ranking-list');
         this.slots = [
             document.getElementById('slot-0'),
             document.getElementById('slot-1'),
@@ -340,19 +343,60 @@ class PuzzleGame {
      */
     async updateTopRankDisplay() {
         const topRank = await this.rankManager.getTopRank();
-        if (this.topRankEl) {
+        
+        // Update top record display
+        if (this.topRankLabelEl) {
             if (topRank) {
-                this.topRankEl.innerHTML = `
-                    <div class="text-xs text-slate-400">TOP RECORD</div>
-                    <div class="text-sm font-bold text-yellow-400">${topRank.name}: ${topRank.score}</div>
+                this.topRankLabelEl.innerHTML = `
+                    <span class="text-lg">🥇</span>
+                    <span>${topRank.name}: ${topRank.score}</span>
                 `;
             } else {
-                this.topRankEl.innerHTML = `
-                    <div class="text-xs text-slate-400">TOP RECORD</div>
-                    <div class="text-sm font-bold text-slate-500">No record yet</div>
+                this.topRankLabelEl.innerHTML = `
+                    <span class="text-slate-500 font-normal italic">No record</span>
                 `;
             }
         }
+    }
+
+    /**
+     * Show ranking modal with top 10 players
+     */
+    async showRankingModal() {
+        if (!this.rankingModal || !this.rankingListEl) return;
+        
+        const ranks = await this.rankManager.getTopRanks();
+        
+        this.rankingListEl.innerHTML = '';
+        
+        if (ranks.length === 0) {
+            this.rankingListEl.innerHTML = `
+                <div class="text-center py-8 text-slate-500">
+                    No records yet. Be the first!
+                </div>
+            `;
+        } else {
+            ranks.forEach((rank, index) => {
+                let icon = '';
+                if (index === 0) icon = '🥇';
+                else if (index === 1) icon = '🥈';
+                else if (index === 2) icon = '🥉';
+                else icon = `<span class="inline-block w-6 text-center text-slate-500 font-mono text-xs">${index + 1}</span>`;
+                
+                const rankEl = document.createElement('div');
+                rankEl.className = `flex justify-between items-center p-3 rounded-lg ${index === 0 ? 'bg-yellow-400/10 border border-yellow-400/20' : 'bg-slate-700/50'}`;
+                rankEl.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <span class="text-xl">${icon}</span>
+                        <span class="font-bold ${index === 0 ? 'text-yellow-400' : 'text-slate-200'}">${rank.name}</span>
+                    </div>
+                    <div class="font-mono font-bold text-green-400">${rank.score}</div>
+                `;
+                this.rankingListEl.appendChild(rankEl);
+            });
+        }
+        
+        this.rankingModal.classList.remove('hidden');
     }
 
     /**

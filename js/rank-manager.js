@@ -15,12 +15,13 @@ class RankManager {
      */
     async loadTopRank() {
         try {
-            const rank = await this.apiClient.getTopRank();
-            this.topRank = rank;
-            return rank;
+            const ranks = await this.apiClient.getTopRank();
+            this.topRanks = Array.isArray(ranks) ? ranks : (ranks ? [ranks] : []);
+            this.topRank = this.topRanks.length > 0 ? this.topRanks[0] : null;
+            return this.topRanks;
         } catch (e) {
             console.error('Error loading top rank:', e);
-            return null;
+            return [];
         }
     }
 
@@ -32,8 +33,10 @@ class RankManager {
      */
     async saveTopRank(name, score) {
         try {
-            const rankData = await this.apiClient.saveTopRank(name, score);
-            this.topRank = rankData;
+            const result = await this.apiClient.saveTopRank(name, score);
+            // API now returns {rank, ranks}
+            this.topRank = result.rank;
+            this.topRanks = result.ranks;
             return true;
         } catch (e) {
             console.error('Error saving top rank:', e);
@@ -42,24 +45,35 @@ class RankManager {
     }
 
     /**
-     * Check if score is a new record
+     * Check if score is a new record (qualifies for top 10)
      * @param {number} score - Score to check
-     * @returns {Promise<boolean>} - True if score is higher than current record
+     * @returns {Promise<boolean>} - True if score qualifies for top 10
      */
     async isNewRecord(score) {
-        if (!this.topRank) {
+        if (!this.topRanks) {
             await this.loadTopRank();
         }
-        if (!this.topRank) return true;
-        return score > this.topRank.score;
+        if (this.topRanks.length < 10) return true;
+        return score > this.topRanks[this.topRanks.length - 1].score;
     }
 
     /**
-     * Get current top rank
+     * Get current top ranks
+     * @returns {Promise<Array>} - Top ranks array
+     */
+    async getTopRanks() {
+        if (!this.topRanks) {
+            await this.loadTopRank();
+        }
+        return this.topRanks;
+    }
+
+    /**
+     * Get the absolute #1 rank
      * @returns {Promise<Object|null>} - Top rank data or null
      */
     async getTopRank() {
-        if (!this.topRank) {
+        if (!this.topRanks) {
             await this.loadTopRank();
         }
         return this.topRank;

@@ -336,18 +336,21 @@ const TOP_RANK_FILE = path.join(__dirname, 'top-rank.json');
 async function loadTopRank() {
     try {
         const data = await fs.readFile(TOP_RANK_FILE, 'utf8');
-        const rank = JSON.parse(data);
-        // Check if rank is valid (not null and has required fields)
-        if (rank && typeof rank === 'object' && typeof rank.score === 'number' && rank.name) {
-            return rank;
+        const ranks = JSON.parse(data);
+        // Check if ranks is a valid array
+        if (Array.isArray(ranks)) {
+            return ranks;
         }
-        // File exists but contains null or invalid data
-        return null;
+        // If it's a single object (legacy), wrap it in an array
+        if (ranks && typeof ranks === 'object' && typeof ranks.score === 'number') {
+            return [ranks];
+        }
+        return [];
     } catch (e) {
         if (e.code === 'ENOENT') {
-            // File doesn't exist, create empty file with null
+            // File doesn't exist, create empty file with empty array
             try {
-                await fs.writeFile(TOP_RANK_FILE, JSON.stringify(null, null, 2), 'utf8');
+                await fs.writeFile(TOP_RANK_FILE, JSON.stringify([], null, 2), 'utf8');
             } catch (writeErr) {
                 console.error('Error creating top-rank.json file:', writeErr);
             }
@@ -355,19 +358,17 @@ async function loadTopRank() {
             console.error('Error loading top rank:', e);
         }
     }
-    return null;
+    return [];
 }
 
 // Initialize top-rank.json file on server start
 async function initializeTopRankFile() {
     try {
-        // Try to read the file to check if it exists and is valid
-        const rank = await loadTopRank();
-        if (rank) {
-            console.log(`Top rank loaded from file: ${rank.name} - ${rank.score}`);
+        const ranks = await loadTopRank();
+        if (ranks.length > 0) {
+            console.log(`Top rank loaded: ${ranks.length} records, highest: ${ranks[0].score}`);
         } else {
-            // File exists but is null/empty, or file doesn't exist (loadTopRank creates it)
-            console.log('Top rank file initialized (no existing record)');
+            console.log('Top rank file initialized (no existing records)');
         }
     } catch (e) {
         console.error('Error initializing top-rank.json file:', e);
@@ -376,13 +377,22 @@ async function initializeTopRankFile() {
 
 async function saveTopRank(name, score) {
     try {
-        const rankData = {
+        const ranks = await loadTopRank();
+        const newRank = {
             name: name.trim() || 'Anonymous',
             score: score,
             date: new Date().toISOString()
         };
-        await fs.writeFile(TOP_RANK_FILE, JSON.stringify(rankData, null, 2), 'utf8');
-        return rankData;
+        
+        ranks.push(newRank);
+        // Sort by score descending
+        ranks.sort((a, b) => b.score - a.score);
+        
+        // Keep top 10
+        const top10 = ranks.slice(0, 10);
+        
+        await fs.writeFile(TOP_RANK_FILE, JSON.stringify(top10, null, 2), 'utf8');
+        return top10;
     } catch (e) {
         console.error('Error saving top rank:', e);
         throw e;
@@ -627,13 +637,15 @@ app.post('/api/rank', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Missing name or score' });
         }
         
-        const topRank = await loadTopRank();
-        if (topRank && score <= topRank.score) {
-            return res.status(400).json({ success: false, error: 'Score is not higher than current record' });
+        const ranks = await loadTopRank();
+        const isTop10 = ranks.length < 10 || score > ranks[ranks.length - 1].score;
+        
+        if (!isTop10) {
+            return res.status(400).json({ success: false, error: 'Score does not qualify for top 10' });
         }
         
-        const rankData = await saveTopRank(name, score);
-        res.json({ success: true, rank: rankData });
+        const updatedRanks = await saveTopRank(name, score);
+        res.json({ success: true, rank: updatedRanks[0], ranks: updatedRanks });
     } catch (error) {
         console.error('Error saving top rank:', error);
         res.status(500).json({ success: false, error: error.message });
