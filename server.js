@@ -422,7 +422,8 @@ app.post('/api/game/init', (req, res) => {
             currentPieces: initialPieces,
             boardManager: boardManager,
             pieceGenerator: pieceGenerator,
-            shapeLibrary: shapeLibrary
+            shapeLibrary: shapeLibrary,
+            comboCount: 0
         };
         
         gameSessions.set(sessionId, gameState);
@@ -501,11 +502,25 @@ app.post('/api/game/place', (req, res) => {
         // Check for completed lines
         const lineData = boardManager.checkLines();
         let lineClearScore = 0;
+        let comboInfo = null;
+
         if (lineData.rows.length > 0 || lineData.cols.length > 0) {
             const count = lineData.rows.length + lineData.cols.length;
             lineClearScore = (count * LINE_CLEAR_BASE_POINTS) + LINE_CLEAR_MULTIPLIER * count * (count - 1);
             gameState.score += lineClearScore;
             boardManager.clearLines(lineData);
+
+            // Update combo
+            gameState.comboCount++;
+            if (gameState.comboCount > 1) {
+                const comboLevel = gameState.comboCount - 1;
+                const comboBonus = 5 * comboLevel;
+                gameState.score += comboBonus;
+                comboInfo = { level: comboLevel, bonus: comboBonus };
+            }
+        } else {
+            // Reset combo if no lines cleared
+            gameState.comboCount = 0;
         }
         
         // Remove placed piece (set to null)
@@ -535,6 +550,7 @@ app.post('/api/game/place', (req, res) => {
             pieces: gameState.currentPieces, // Array of 3 (may contain nulls for placed pieces)
             lineCleared: lineData,
             lineClearScore: lineClearScore,
+            comboInfo: comboInfo,
             isGameOver: isGameOver
         });
     } catch (error) {

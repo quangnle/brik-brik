@@ -129,6 +129,11 @@ class PuzzleGame {
                 // Handle line clearing animation if lines were cleared
                 if (result.lineCleared && (result.lineCleared.rows.length > 0 || result.lineCleared.cols.length > 0)) {
                     await this.deleteLines(result.lineCleared);
+                    
+                    // Show combo notification if any
+                    if (result.comboInfo) {
+                        this.showComboNotification(result.comboInfo.level, result.comboInfo.bonus);
+                    }
                 }
                 
                 // Check if all pieces are used - if so, request new pieces
@@ -336,6 +341,39 @@ class PuzzleGame {
      */
     updateScoreUI() {
         this.scoreEl.innerText = this.score;
+    }
+
+    /**
+     * Show combo notification with animation
+     * @param {number} level - Combo level (1, 2, 3...)
+     * @param {number} bonus - Bonus points awarded
+     */
+    showComboNotification(level, bonus) {
+        const notification = document.getElementById('combo-notification');
+        const text = document.getElementById('combo-text');
+        const inner = notification.querySelector('.combo-animate');
+        
+        if (!notification || !text || !inner) return;
+        
+        // Set text
+        text.innerText = `Combo x${level} +${bonus} 🔥`;
+        
+        // Reset animation
+        inner.classList.remove('show-combo');
+        notification.classList.remove('opacity-0');
+        notification.classList.add('opacity-100');
+        
+        // Force reflow
+        void inner.offsetWidth;
+        
+        // Start animation
+        inner.classList.add('show-combo');
+        
+        // Hide after animation
+        setTimeout(() => {
+            notification.classList.remove('opacity-100');
+            notification.classList.add('opacity-0');
+        }, 1500);
     }
 
     /**

@@ -157,3 +157,20 @@ footer {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+
+/* Combo Notification Animations */
+@keyframes combo-pop {
+    0% { transform: scale(0.5); opacity: 0; }
+    20% { transform: scale(1.2); opacity: 1; }
+    30% { transform: scale(1); opacity: 1; }
+    80% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1.5); opacity: 0; }
+}
+
+.show-combo {
+    animation: combo-pop 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+#combo-notification {
+    transition: opacity 0.2s;
+}
