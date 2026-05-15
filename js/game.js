@@ -349,31 +349,23 @@ class PuzzleGame {
      * @param {number} bonus - Bonus points awarded
      */
     showComboNotification(level, bonus) {
-        const notification = document.getElementById('combo-notification');
         const text = document.getElementById('combo-text');
-        const inner = notification.querySelector('.combo-animate');
-        
-        if (!notification || !text || !inner) return;
-        
+        if (!text) return;
+
         // Set text
         text.innerText = `Combo x${level} +${bonus} 🔥`;
-        
-        // Reset animation
-        inner.classList.remove('show-combo');
-        notification.classList.remove('opacity-0');
-        notification.classList.add('opacity-100');
-        
-        // Force reflow
-        void inner.offsetWidth;
-        
-        // Start animation
-        inner.classList.add('show-combo');
-        
-        // Hide after animation
+
+        // Reset animation by removing the class, forcing reflow, then re-adding
+        text.classList.remove('show-combo');
+        void text.offsetWidth; // force reflow
+
+        // Trigger animation
+        text.classList.add('show-combo');
+
+        // Clean up class after animation ends (1s)
         setTimeout(() => {
-            notification.classList.remove('opacity-100');
-            notification.classList.add('opacity-0');
-        }, 1500);
+            text.classList.remove('show-combo');
+        }, 1000);
     }
 
     /**

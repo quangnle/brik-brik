@@ -158,19 +158,31 @@ footer {
 }
 
 
-/* Combo Notification Animations */
-@keyframes combo-pop {
-    0% { transform: scale(0.5); opacity: 0; }
-    20% { transform: scale(1.2); opacity: 1; }
-    30% { transform: scale(1); opacity: 1; }
-    80% { transform: scale(1); opacity: 1; }
-    100% { transform: scale(1.5); opacity: 0; }
+/* Combo Notification - floating text, fade out in 1s */
+@keyframes combo-float-fade {
+    0%   { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+    20%  { opacity: 1; transform: translate(-50%, -65%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -100%) scale(0.9); }
 }
 
-.show-combo {
-    animation: combo-pop 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+.combo-text-float {
+    display: block;
+    font-size: 2rem;
+    font-weight: 900;
+    color: #facc15; /* yellow-400 */
+    text-shadow:
+        0 0 12px rgba(250, 204, 21, 0.8),
+        0 2px 6px rgba(0, 0, 0, 0.9),
+        0 0 2px rgba(0,0,0,1);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.combo-text-float.show-combo {
+    animation: combo-float-fade 1s ease-out forwards;
 }
 
 #combo-notification {
-    transition: opacity 0.2s;
+    /* position set inline via fixed top-1/2 left-1/2 */
 }
