@@ -25,19 +25,6 @@ class CanvasRenderer {
         this.clearingCells = new Set();
         this.clearingAnimations = new Map(); // Store animation data for each cell
         this.animationFrame = null;
-        this.simpleDraw = IS_MOBILE;
-    }
-
-    /**
-     * Cancel any in-flight clear animation
-     */
-    cancelClearAnimation() {
-        if (this.animationFrame != null) {
-            cancelAnimationFrame(this.animationFrame);
-            this.animationFrame = null;
-        }
-        this.clearingCells.clear();
-        this.clearingAnimations.clear();
     }
 
     /**
@@ -159,8 +146,8 @@ class CanvasRenderer {
                 }
                 this.ctx.fill();
                 
-                // 3D effect for filled cells (skipped on mobile to reduce per-frame cost)
-                if (!this.simpleDraw && board[r][c] === 1 && !isClearing && !isHighlighted) {
+                // Add 3D effect for filled cells
+                if (board[r][c] === 1 && !isClearing && !isHighlighted) {
                     const gradient = this.ctx.createLinearGradient(x, y, x + this.cellSize, y + this.cellSize);
                     gradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
                     gradient.addColorStop(0.5, 'transparent');
@@ -237,45 +224,49 @@ class CanvasRenderer {
                         this.ctx.closePath();
                     }
                     
+                    // Fill base color
                     this.ctx.fillStyle = color;
                     this.ctx.fill();
                     
-                    if (!this.simpleDraw) {
-                        const gradient = this.ctx.createLinearGradient(
-                            blockX, blockY,
-                            blockX + blockSize, blockY + blockSize
-                        );
-                        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
-                        gradient.addColorStop(0.5, 'transparent');
-                        gradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)');
-                        
-                        this.ctx.fillStyle = gradient;
-                        this.ctx.fill();
-                        
-                        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-                        this.ctx.lineWidth = 1;
-                        this.ctx.stroke();
-                        
-                        this.ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-                        this.ctx.shadowBlur = 3;
-                        this.ctx.shadowOffsetX = 2;
-                        this.ctx.shadowOffsetY = 2;
-                        
-                        this.ctx.beginPath();
-                        if (this.ctx.roundRect) {
-                            this.ctx.roundRect(blockX + 1, blockY + 1, blockSize - 2, blockSize - 2, radius);
-                        } else {
-                            this.ctx.rect(blockX + 1, blockY + 1, blockSize - 2, blockSize - 2);
-                        }
-                        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
-                        this.ctx.lineWidth = 1;
-                        this.ctx.stroke();
-                        
-                        this.ctx.shadowColor = 'transparent';
-                        this.ctx.shadowBlur = 0;
-                        this.ctx.shadowOffsetX = 0;
-                        this.ctx.shadowOffsetY = 0;
+                    // Add 3D gradient overlay (light from top-left, dark at bottom-right)
+                    const gradient = this.ctx.createLinearGradient(
+                        blockX, blockY,
+                        blockX + blockSize, blockY + blockSize
+                    );
+                    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
+                    gradient.addColorStop(0.5, 'transparent');
+                    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)');
+                    
+                    this.ctx.fillStyle = gradient;
+                    this.ctx.fill();
+                    
+                    // Add highlight border (top-left)
+                    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                    this.ctx.lineWidth = 1;
+                    this.ctx.stroke();
+                    
+                    // Add shadow for depth (bottom-right)
+                    this.ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+                    this.ctx.shadowBlur = 3;
+                    this.ctx.shadowOffsetX = 2;
+                    this.ctx.shadowOffsetY = 2;
+                    
+                    // Draw subtle outer shadow
+                    this.ctx.beginPath();
+                    if (this.ctx.roundRect) {
+                        this.ctx.roundRect(blockX + 1, blockY + 1, blockSize - 2, blockSize - 2, radius);
+                    } else {
+                        this.ctx.rect(blockX + 1, blockY + 1, blockSize - 2, blockSize - 2);
                     }
+                    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+                    this.ctx.lineWidth = 1;
+                    this.ctx.stroke();
+                    
+                    // Reset shadow
+                    this.ctx.shadowColor = 'transparent';
+                    this.ctx.shadowBlur = 0;
+                    this.ctx.shadowOffsetX = 0;
+                    this.ctx.shadowOffsetY = 0;
                     
                     this.ctx.restore();
                 }
@@ -372,10 +363,12 @@ class CanvasRenderer {
      * @param {Array} rows - Array of row indices
      * @param {Array} cols - Array of column indices
      * @param {Function} callback - Callback when animation completes
-     * @param {Function} onFrame - Called each frame to redraw the board
      */
-    animateClearing(rows, cols, callback, onFrame) {
-        this.cancelClearAnimation();
+    animateClearing(rows, cols, callback) {
+        if (this.animationFrame != null) {
+            cancelAnimationFrame(this.animationFrame);
+            this.animationFrame = null;
+        }
 
         const startTime = Date.now();
         const duration = CLEAR_ANIMATION_DURATION;
@@ -409,10 +402,13 @@ class CanvasRenderer {
             }
         });
         
+        // Animate
         const animate = () => {
-            const elapsed = Date.now() - startTime;
+            const currentTime = Date.now();
+            const elapsed = currentTime - startTime;
             const progress = Math.min(elapsed / duration, 1);
             
+            // Update animation properties for each cell
             this.clearingAnimations.forEach((anim) => {
                 if (progress < 0.3) {
                     anim.scale = 1 + (progress / 0.3) * 0.3;
@@ -421,23 +417,21 @@ class CanvasRenderer {
                 } else {
                     anim.scale = 1 - ((progress - 0.7) / 0.3);
                 }
+                
                 anim.opacity = 1 - progress;
-                anim.rotation = this.simpleDraw ? 0 : progress * Math.PI * 0.5;
+                anim.rotation = progress * Math.PI * 0.5;
             });
-
-            if (onFrame) onFrame();
             
             if (progress < 1) {
                 this.animationFrame = requestAnimationFrame(animate);
             } else {
-                this.animationFrame = null;
                 this.clearingCells.clear();
                 this.clearingAnimations.clear();
+                this.animationFrame = null;
                 if (callback) callback();
             }
         };
         
-        if (onFrame) onFrame();
         this.animationFrame = requestAnimationFrame(animate);
     }
 

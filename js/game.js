@@ -24,8 +24,7 @@ class PuzzleGame {
         this.currentPieces = [null, null, null]; // 3 current pieces
         this.highlightData = null; // For preview highlighting
         this.isRenderingPieces = false; // Flag to prevent concurrent renders
-        this._renderScheduled = false;
-        this._renderRafId = null;
+        this._placeGeneration = 0;
         
         // DOM elements
         this.scoreEl = document.getElementById('score');
@@ -52,12 +51,15 @@ class PuzzleGame {
      */
     async init() {
         try {
+            this._placeGeneration++;
+            this.apiClient.abortPendingRequests();
+
             // Hide modals
             this.gameOverModal.classList.add('hidden');
             this.recordModal?.classList.add('hidden');
             
             // Initialize game on server
-            const gameData = await this.apiClient.initGame();
+            const gameData = await this.apiClient.initGame({ newSession: true });
             
             // Update local state
             this.board = gameData.board;
@@ -72,6 +74,7 @@ class PuzzleGame {
             // Load and display top rank
             await this.updateTopRankDisplay();
         } catch (error) {
+            if (error.name === 'AbortError') return;
             console.error('Error initializing game:', error);
             alert('Failed to initialize game. Please refresh the page.');
         }
@@ -92,6 +95,7 @@ class PuzzleGame {
      * @returns {Promise<boolean>} - True if placement was successful
      */
     async tryPlacePiece(anchorX, anchorY, piece) {
+        const placeGeneration = this._placeGeneration;
         try {
             const coords = this.getBoardCoordsFromAnchor(anchorX, anchorY, piece.matrix);
             
@@ -105,6 +109,7 @@ class PuzzleGame {
             
             // Call server API to place piece (x = row, y = col)
             const result = await this.apiClient.placePiece(piece, coords.r, coords.c);
+            if (placeGeneration !== this._placeGeneration) return false;
             
             if (result.success) {
                 // Update local state from server response
@@ -148,8 +153,9 @@ class PuzzleGame {
                             }
                         }
                     } catch (error) {
-                        console.error('Error requesting new pieces:', error);
-                        // Continue anyway - pieces will stay empty
+                        if (error.name !== 'AbortError') {
+                            console.error('Error requesting new pieces:', error);
+                        }
                     }
                 }
                 
@@ -177,8 +183,8 @@ class PuzzleGame {
                 return false;
             }
         } catch (error) {
+            if (error.name === 'AbortError') return false;
             console.error('Error placing piece:', error);
-            // Silently fail - user will see piece return to original position
             return false;
         }
     }
@@ -229,26 +235,12 @@ class PuzzleGame {
     }
 
     /**
-     * Schedule a single board redraw on the next animation frame (coalesces touchmove bursts)
-     */
-    scheduleRender() {
-        if (this._renderScheduled) return;
-        this._renderScheduled = true;
-        this._renderRafId = requestAnimationFrame(() => {
-            this._renderScheduled = false;
-            this._renderRafId = null;
-            this.renderBoard();
-        });
-    }
-
-    /**
      * Highlight preview of piece placement on canvas
      * @param {number} anchorX - Anchor point X coordinate
      * @param {number} anchorY - Anchor point Y coordinate
      * @param {Object} piece - Piece object
-     * @param {boolean} shouldRender - Whether to redraw immediately (default true)
      */
-    highlightPreview(anchorX, anchorY, piece, shouldRender = true) {
+    highlightPreview(anchorX, anchorY, piece) {
         const coords = this.getBoardCoordsFromAnchor(anchorX, anchorY, piece.matrix);
         
         // Validate coordinates are within bounds first
@@ -257,7 +249,7 @@ class PuzzleGame {
         if (coords.r < 0 || coords.c < 0 || 
             coords.r + pRows > BOARD_SIZE || coords.c + pCols > BOARD_SIZE) {
             this.highlightData = null;
-            if (shouldRender) this.renderBoard();
+            this.renderBoard();
             return;
         }
         
@@ -275,7 +267,7 @@ class PuzzleGame {
             this.highlightData = null;
         }
         
-        if (shouldRender) this.renderBoard();
+        this.renderBoard();
     }
 
     /**
@@ -330,7 +322,17 @@ class PuzzleGame {
      */
     async animateClearing(rows, cols) {
         return new Promise((resolve) => {
-            this.renderer.animateClearing(rows, cols, resolve, () => this.renderBoard());
+            this.renderer.animateClearing(rows, cols, () => {
+                resolve();
+            });
+            
+            const animate = () => {
+                this.renderBoard();
+                if (this.renderer.clearingCells.size > 0) {
+                    requestAnimationFrame(animate);
+                }
+            };
+            animate();
         });
     }
 
@@ -493,7 +495,7 @@ class PuzzleGame {
             // Draw ghost piece with slight transparency and shadow
             this.renderer.ctx.save();
             this.renderer.ctx.globalAlpha = 0.8;
-            this.renderer.drawPiece(piece.matrix, anchorCanvasX, anchorCanvasY, color, 1, !IS_MOBILE);
+            this.renderer.drawPiece(piece.matrix, anchorCanvasX, anchorCanvasY, color, 1, true);
             this.renderer.ctx.restore();
         }
     }

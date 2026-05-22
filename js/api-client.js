@@ -7,13 +7,33 @@ class APIClient {
     constructor(baseURL = '') {
         this.baseURL = baseURL;
         this.sessionId = null;
+        this._abortController = null;
+    }
+
+    /**
+     * Abort in-flight game API requests (e.g. on reset before responses return)
+     */
+    abortPendingRequests() {
+        if (this._abortController) {
+            this._abortController.abort();
+        }
+        this._abortController = new AbortController();
+    }
+
+    _requestSignal() {
+        if (!this._abortController) {
+            this._abortController = new AbortController();
+        }
+        return this._abortController.signal;
     }
 
     /**
      * Initialize a new game
+     * @param {Object} options
+     * @param {boolean} options.newSession - Create a fresh server session (drops reuse of old sessionId)
      * @returns {Promise<Object>} - {sessionId, board, score, pieces}
      */
-    async initGame() {
+    async initGame({ newSession = false } = {}) {
         try {
             const response = await fetch(`${this.baseURL}/api/game/init`, {
                 method: 'POST',
@@ -21,8 +41,9 @@ class APIClient {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    sessionId: this.sessionId || null
-                })
+                    sessionId: newSession ? null : (this.sessionId || null)
+                }),
+                signal: this._requestSignal()
             });
             
             const data = await response.json();
@@ -33,6 +54,9 @@ class APIClient {
                 throw new Error(data.error || 'Failed to initialize game');
             }
         } catch (error) {
+            if (error.name === 'AbortError') {
+                throw error;
+            }
             console.error('Error initializing game:', error);
             throw error;
         }
@@ -61,12 +85,12 @@ class APIClient {
                     piece: piece,
                     x: x,
                     y: y
-                })
+                }),
+                signal: this._requestSignal()
             });
             
             const data = await response.json();
             
-            // Check if response was successful
             if (!response.ok || !data.success) {
                 const errorMsg = data.error || `Server error: ${response.status} ${response.statusText}`;
                 throw new Error(errorMsg);
@@ -74,11 +98,12 @@ class APIClient {
             
             return data;
         } catch (error) {
-            // Re-throw if it's already our Error object
+            if (error.name === 'AbortError') {
+                throw error;
+            }
             if (error instanceof Error && error.message) {
                 throw error;
             }
-            // Otherwise wrap it
             console.error('Error placing piece:', error);
             throw new Error(error.message || 'Failed to place piece');
         }
@@ -101,12 +126,12 @@ class APIClient {
                 },
                 body: JSON.stringify({
                     sessionId: this.sessionId
-                })
+                }),
+                signal: this._requestSignal()
             });
             
             const data = await response.json();
             
-            // Check if response was successful
             if (!response.ok || !data.success) {
                 const errorMsg = data.error || `Server error: ${response.status} ${response.statusText}`;
                 throw new Error(errorMsg);
@@ -114,11 +139,12 @@ class APIClient {
             
             return data;
         } catch (error) {
-            // Re-throw if it's already our Error object
+            if (error.name === 'AbortError') {
+                throw error;
+            }
             if (error instanceof Error && error.message) {
                 throw error;
             }
-            // Otherwise wrap it
             console.error('Error requesting new pieces:', error);
             throw new Error(error.message || 'Failed to request new pieces');
         }
@@ -134,7 +160,9 @@ class APIClient {
         }
 
         try {
-            const response = await fetch(`${this.baseURL}/api/game/state/${this.sessionId}`);
+            const response = await fetch(`${this.baseURL}/api/game/state/${this.sessionId}`, {
+                signal: this._requestSignal()
+            });
             const data = await response.json();
             if (data.success) {
                 return data;
@@ -142,6 +170,9 @@ class APIClient {
                 throw new Error(data.error || 'Failed to get game state');
             }
         } catch (error) {
+            if (error.name === 'AbortError') {
+                throw error;
+            }
             console.error('Error getting game state:', error);
             throw error;
         }
@@ -187,7 +218,7 @@ class APIClient {
             
             const data = await response.json();
             if (data.success) {
-                return data.rank;
+                return data;
             } else {
                 throw new Error(data.error || 'Failed to save top rank');
             }

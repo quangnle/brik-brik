@@ -43,8 +43,32 @@ const COLORS = [
     'bg-green-500', 'bg-purple-500', 'bg-red-500', 'bg-pink-500'
 ];
 
+const SHAPE_LIBRARY = Object.values(RAW_SHAPES);
+
 // In-memory game sessions (in production, use Redis or database)
 const gameSessions = new Map();
+const SESSION_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours idle
+const SESSION_CLEANUP_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+
+function touchSession(gameState) {
+    gameState.lastActivityAt = Date.now();
+}
+
+function pruneStaleSessions() {
+    const now = Date.now();
+    let removed = 0;
+    for (const [id, state] of gameSessions) {
+        if (now - (state.lastActivityAt || 0) > SESSION_TTL_MS) {
+            gameSessions.delete(id);
+            removed++;
+        }
+    }
+    if (removed > 0) {
+        console.log(`Pruned ${removed} stale game session(s), ${gameSessions.size} active`);
+    }
+}
+
+setInterval(pruneStaleSessions, SESSION_CLEANUP_INTERVAL_MS);
 
 // Helper: Compare two matrices for equality
 function matricesEqual(a, b) {
@@ -410,8 +434,7 @@ app.post('/api/game/init', (req, res) => {
         const boardManager = new BoardManager(BOARD_SIZE);
         boardManager.createEmptyBoard();
         
-        const shapeLibrary = Object.values(RAW_SHAPES);
-        const pieceGenerator = new PieceGenerator(shapeLibrary, boardManager);
+        const pieceGenerator = new PieceGenerator(SHAPE_LIBRARY, boardManager);
         
         const initialPieces = pieceGenerator.generatePieces(PIECES_PER_ROUND, boardManager.board);
         initialPieces.sort(() => Math.random() - 0.5);
@@ -422,8 +445,8 @@ app.post('/api/game/init', (req, res) => {
             currentPieces: initialPieces,
             boardManager: boardManager,
             pieceGenerator: pieceGenerator,
-            shapeLibrary: shapeLibrary,
-            comboCount: 0
+            comboCount: 0,
+            lastActivityAt: Date.now()
         };
         
         gameSessions.set(sessionId, gameState);
@@ -454,6 +477,7 @@ app.post('/api/game/place', (req, res) => {
         if (!gameState) {
             return res.status(404).json({ success: false, error: 'Game session not found' });
         }
+        touchSession(gameState);
         
         // Validate piece is one of the current pieces (and not already used)
         const pieceMatrix = piece.matrix;
@@ -572,6 +596,7 @@ app.post('/api/game/requestNewPieces', (req, res) => {
         if (!gameState) {
             return res.status(404).json({ success: false, error: 'Game session not found' });
         }
+        touchSession(gameState);
         
         // Check if all current pieces are used (all null)
         const allPiecesUsed = gameState.currentPieces.every(p => p === null);
@@ -620,6 +645,7 @@ app.get('/api/game/state/:sessionId', (req, res) => {
         if (!gameState) {
             return res.status(404).json({ success: false, error: 'Game session not found' });
         }
+        touchSession(gameState);
         
         res.json({
             success: true,

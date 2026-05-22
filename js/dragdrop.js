@@ -104,8 +104,7 @@ class DragDropHandler {
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
         this.updateGhostPosition(clientX, clientY);
-        this.game.highlightPreview(this.anchorPointX, this.anchorPointY, this.draggedPiece, false);
-        this.game.scheduleRender();
+        this.game.highlightPreview(this.anchorPointX, this.anchorPointY, this.draggedPiece);
     }
 
     /**
@@ -278,6 +277,8 @@ class DragDropHandler {
         // Anchor point follows the projected position
         this.anchorPointX = projected.x;
         this.anchorPointY = projected.y;
+
+        this.game.renderBoard();
     }
 }
 
