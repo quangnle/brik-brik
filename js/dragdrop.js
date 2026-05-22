@@ -8,30 +8,39 @@ class DragDropHandler {
         this.draggedPiece = null;
         this.draggedIndex = -1;
         this.isDragging = false;
-        this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        this.isMobile = IS_MOBILE;
         // Anchor point: the center of the piece, always follows cursor/finger
         this.anchorPointX = 0;
         this.anchorPointY = 0;
         // Store initial click position in slot for relative mapping
         this.initialSlotRect = null;
         this.initialClickInSlot = { x: 0, y: 0 };
+
+        // Bound handlers (for removeEventListener if ever needed)
+        this._onStart = (e) => this.onStart(e);
+        this._onMove = (e) => this.onMove(e);
+        this._onEnd = (e) => this.onEnd(e);
+        this._onCancel = (e) => this.onCancel(e);
     }
 
     /**
-     * Setup drag and drop event listeners
+     * Setup drag and drop event listeners (once per page load)
      */
     setupDragEvents() {
+        if (this._eventsBound) return;
+        this._eventsBound = true;
+
         const area = document.getElementById('pieces-area');
         
-        area.addEventListener('mousedown', (e) => this.onStart(e));
-        area.addEventListener('touchstart', (e) => this.onStart(e), {passive: false});
+        area.addEventListener('mousedown', this._onStart);
+        area.addEventListener('touchstart', this._onStart, { passive: false });
 
-        document.addEventListener('mousemove', (e) => this.onMove(e));
-        document.addEventListener('touchmove', (e) => this.onMove(e), {passive: false});
+        document.addEventListener('mousemove', this._onMove);
+        document.addEventListener('touchmove', this._onMove, { passive: false });
 
-        document.addEventListener('mouseup', (e) => this.onEnd(e));
-        document.addEventListener('touchend', (e) => this.onEnd(e));
-        document.addEventListener('touchcancel', (e) => this.onCancel(e)); // Handle touch cancellation
+        document.addEventListener('mouseup', this._onEnd);
+        document.addEventListener('touchend', this._onEnd);
+        document.addEventListener('touchcancel', this._onCancel);
     }
 
     /**
@@ -95,9 +104,8 @@ class DragDropHandler {
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
         this.updateGhostPosition(clientX, clientY);
-        
-        // Highlight preview (uses anchor point)
-        this.game.highlightPreview(this.anchorPointX, this.anchorPointY, this.draggedPiece);
+        this.game.highlightPreview(this.anchorPointX, this.anchorPointY, this.draggedPiece, false);
+        this.game.scheduleRender();
     }
 
     /**
@@ -270,9 +278,6 @@ class DragDropHandler {
         // Anchor point follows the projected position
         this.anchorPointX = projected.x;
         this.anchorPointY = projected.y;
-        
-        // Trigger board redraw to show ghost piece
-        this.game.renderBoard();
     }
 }
 

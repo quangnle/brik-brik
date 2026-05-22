@@ -24,6 +24,8 @@ class PuzzleGame {
         this.currentPieces = [null, null, null]; // 3 current pieces
         this.highlightData = null; // For preview highlighting
         this.isRenderingPieces = false; // Flag to prevent concurrent renders
+        this._renderScheduled = false;
+        this._renderRafId = null;
         
         // DOM elements
         this.scoreEl = document.getElementById('score');
@@ -41,6 +43,7 @@ class PuzzleGame {
             document.getElementById('slot-2')
         ];
 
+        this.dragHandler.setupDragEvents();
         this.init();
     }
 
@@ -68,9 +71,6 @@ class PuzzleGame {
             
             // Load and display top rank
             await this.updateTopRankDisplay();
-            
-            // Setup drag and drop events
-            this.dragHandler.setupDragEvents();
         } catch (error) {
             console.error('Error initializing game:', error);
             alert('Failed to initialize game. Please refresh the page.');
@@ -229,12 +229,26 @@ class PuzzleGame {
     }
 
     /**
+     * Schedule a single board redraw on the next animation frame (coalesces touchmove bursts)
+     */
+    scheduleRender() {
+        if (this._renderScheduled) return;
+        this._renderScheduled = true;
+        this._renderRafId = requestAnimationFrame(() => {
+            this._renderScheduled = false;
+            this._renderRafId = null;
+            this.renderBoard();
+        });
+    }
+
+    /**
      * Highlight preview of piece placement on canvas
      * @param {number} anchorX - Anchor point X coordinate
      * @param {number} anchorY - Anchor point Y coordinate
      * @param {Object} piece - Piece object
+     * @param {boolean} shouldRender - Whether to redraw immediately (default true)
      */
-    highlightPreview(anchorX, anchorY, piece) {
+    highlightPreview(anchorX, anchorY, piece, shouldRender = true) {
         const coords = this.getBoardCoordsFromAnchor(anchorX, anchorY, piece.matrix);
         
         // Validate coordinates are within bounds first
@@ -243,14 +257,11 @@ class PuzzleGame {
         if (coords.r < 0 || coords.c < 0 || 
             coords.r + pRows > BOARD_SIZE || coords.c + pCols > BOARD_SIZE) {
             this.highlightData = null;
-            this.renderBoard();
+            if (shouldRender) this.renderBoard();
             return;
         }
         
-        // Create a temporary board manager for validation
-        // We'll create a simple canPlace check using current board state
         if (this.canPlaceOnBoard(this.board, piece.matrix, coords.r, coords.c)) {
-            // Create highlight data
             const highlightCells = [];
             for (let i = 0; i < piece.matrix.length; i++) {
                 for (let j = 0; j < piece.matrix[0].length; j++) {
@@ -264,7 +275,7 @@ class PuzzleGame {
             this.highlightData = null;
         }
         
-        this.renderBoard();
+        if (shouldRender) this.renderBoard();
     }
 
     /**
@@ -319,18 +330,7 @@ class PuzzleGame {
      */
     async animateClearing(rows, cols) {
         return new Promise((resolve) => {
-            this.renderer.animateClearing(rows, cols, () => {
-                resolve();
-            });
-            
-            // Redraw during animation
-            const animate = () => {
-                this.renderBoard();
-                if (this.renderer.clearingCells.size > 0) {
-                    requestAnimationFrame(animate);
-                }
-            };
-            animate();
+            this.renderer.animateClearing(rows, cols, resolve, () => this.renderBoard());
         });
     }
 
@@ -493,7 +493,7 @@ class PuzzleGame {
             // Draw ghost piece with slight transparency and shadow
             this.renderer.ctx.save();
             this.renderer.ctx.globalAlpha = 0.8;
-            this.renderer.drawPiece(piece.matrix, anchorCanvasX, anchorCanvasY, color, 1, true);
+            this.renderer.drawPiece(piece.matrix, anchorCanvasX, anchorCanvasY, color, 1, !IS_MOBILE);
             this.renderer.ctx.restore();
         }
     }
